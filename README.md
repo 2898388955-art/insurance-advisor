@@ -187,6 +187,18 @@ uv run python -m app.rag.index_doc --doc-id <doc_id> --rebuild
 
 Swagger：`http://127.0.0.1:8080/docs`
 
+## 测试
+
+```bash
+# Java：Service 层单测（分类树、会话重命名/级联删除/消息映射）
+cd server && ./mvnw test
+
+# Python：切分、归一化、路由、合规、加权 RRF
+cd ai && uv run pytest -q
+```
+
+当前共 **31 条**单元测试（Java 7 + Python 24），CI 会在每次 push 时执行。
+
 ## 评测
 
 68 条问题（条款问答 62 + 路由 6），标准答案按条款章节与关键词判定，不依赖被测系统的召回结果。
