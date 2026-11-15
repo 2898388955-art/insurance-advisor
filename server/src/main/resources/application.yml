@@ -1,0 +1,56 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: insurance-advisor-server
+  # 复用 deploy/.env 中的数据库配置；从 server/ 目录启动时生效
+  config:
+    import: optional:file:../deploy/.env[.properties]
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3307}/${MYSQL_DATABASE:insurance_advisor}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    username: ${MYSQL_USER:ia}
+    password: ${MYSQL_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+app:
+  storage:
+    endpoint: http://127.0.0.1:${S3_PORT:9000}
+    access-key: ${RUSTFS_ACCESS_KEY:}
+    secret-key: ${RUSTFS_SECRET_KEY:}
+    bucket: insurance-product
+    region: us-east-1
+    # 预签名 URL 有效期（分钟）
+    presign-minutes: 60
+    max-file-size: 5242880
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+
+springdoc:
+  swagger-ui:
+    path: /docs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{traceId:-}] %logger{36} - %msg%n"
+  level:
+    com.insure.advisor: debug

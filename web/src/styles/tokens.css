@@ -1,0 +1,56 @@
+:root {
+  /* 墨蓝 + 暖纸 + 黄铜：金融杂志质感，不用电商红 */
+  --ink: #101a24;
+  --ink-soft: #2b3844;
+  --paper: #f5f0e6;
+  --paper-raised: #fbf8f1;
+  --paper-deep: #ece4d5;
+  --gold: #b0863c;
+  --gold-soft: #d8bd8a;
+  --teal: #1c635c;
+  --teal-soft: #dcebe6;
+  --muted: #6d746f;
+  --line: rgba(16, 26, 36, 0.12);
+  --line-strong: rgba(16, 26, 36, 0.24);
+  --danger: #a2422f;
+
+  --display: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
+  --body: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+
+  /* 圆角三档 + 胶囊，禁止再出现 2px/4px 混用 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+  --radius: 8px;
+
+  /* 字号五档：12 / 14 / 16 / 19 / 24 / 32 / 44 */
+  --fs-xs: 12px;
+  --fs-sm: 14px;
+  --fs-md: 16px;
+  --fs-lg: 19px;
+  --fs-xl: 24px;
+  --fs-2xl: 32px;
+  --fs-3xl: 44px;
+
+  --shadow-card: 0 1px 0 rgba(16, 26, 36, 0.06), 0 18px 40px -28px rgba(16, 26, 36, 0.45);
+  --shadow-soft: 0 10px 30px -24px rgba(16, 26, 36, 0.35);
+  --max-width: 1240px;
+}
+
+/* Element Plus 主题覆盖 */
+:root {
+  --el-color-primary: #1c635c;
+  --el-color-primary-light-3: #4d8a83;
+  --el-color-primary-light-5: #7fada7;
+  --el-color-primary-light-7: #b1cec9;
+  --el-color-primary-light-9: #e3efec;
+  --el-color-primary-dark-2: #154c47;
+  --el-border-radius-base: 6px;
+  --el-font-family: var(--body);
+  --el-text-color-primary: var(--ink);
+  --el-text-color-regular: var(--ink-soft);
+  --el-border-color: var(--line);
+  --el-fill-color-blank: var(--paper-raised);
+}

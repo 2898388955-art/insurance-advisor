@@ -1,0 +1,139 @@
+name: insurance-advisor
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: ia-mysql
+    restart: unless-stopped
+    ports:
+      # 宿主机 3307，避免与本机已有的 MySQL(3306) 冲突
+      - "${MYSQL_PORT:-3307}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-insurance_advisor}
+      MYSQL_USER: ${MYSQL_USER:-ia}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+08:00
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  redis:
+    image: redis/redis-stack-server:7.4.0-v3
+    container_name: ia-redis
+    restart: unless-stopped
+    ports:
+      # 宿主机 6380，避免与已有容器 hm-redis(6379) 冲突
+      - "${REDIS_PORT:-6380}:6379"
+    # 本地开发不设密码；部署时用 REDIS_ARGS 加 requirepass
+    environment:
+      REDIS_ARGS: ${REDIS_ARGS:---appendonly yes}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ---------- Milvus 依赖 ----------
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.18
+    container_name: ia-etcd
+    restart: unless-stopped
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    volumes:
+      - etcd_data:/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # MinIO 镜像在多个国内源均被拒绝（denied/401），改用 S3 兼容的 RustFS
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: ia-rustfs
+    restart: unless-stopped
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
+      RUSTFS_VOLUMES: /data
+    ports:
+      - "${S3_PORT:-9000}:9000"
+      - "${S3_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - rustfs_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/health || curl -sf http://localhost:9000/minio/health/live || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  milvus:
+    image: milvusdb/milvus:v2.5.4
+    container_name: ia-milvus
+    restart: unless-stopped
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: rustfs:9000
+      MINIO_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      MINIO_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
+      COMMON_STORAGETYPE: remote
+    ports:
+      - "${MILVUS_PORT:-19530}:19530"
+      - "${MILVUS_METRICS_PORT:-9091}:9091"
+    volumes:
+      - milvus_data:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 90s
+    depends_on:
+      etcd:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
+
+  # ---------- 可选：Elasticsearch + IK ----------
+  # 暂不启用。IK 分词插件需从 GitHub 下载，当前网络不通；
+  # Milvus 2.5 原生 BM25 + jieba 分词已覆盖关键词检索需求。
+  # 若后续需要复杂聚合/短语查询，再启用本服务。
+  #
+  # elasticsearch:
+  #   image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+  #   container_name: ia-es
+  #   environment:
+  #     discovery.type: single-node
+  #     xpack.security.enabled: "false"
+  #     ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+  #   ports: ["9200:9200"]
+  #   volumes: [es_data:/usr/share/elasticsearch/data]
+
+volumes:
+  mysql_data:
+  redis_data:
+  etcd_data:
+  rustfs_data:
+  milvus_data:

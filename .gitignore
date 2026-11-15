@@ -1,0 +1,44 @@
+# ---- secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- Java ----
+server/target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# ---- Node / Vue ----
+node_modules/
+web/dist/
+web/.vite/
+npm-debug.log*
+pnpm-debug.log*
+
+# ---- Python ----
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ---- 数据与运行产物（条款 PDF 有版权，不入库）----
+deploy/data/
+data/raw/
+data/parsed/
+data/import/
+data/extracted/
+*.log
+logs/
+
+# ---- IDE / OS ----
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ---- TS build info ----
+*.tsbuildinfo

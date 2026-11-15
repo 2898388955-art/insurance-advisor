@@ -1,0 +1,29 @@
+[project]
+name = "insurance-ai"
+version = "0.1.0"
+description = "保险条款 RAG 与 Agent 编排服务"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.162.5",
+    "httpx>=0.28.1",
+    "jieba>=0.42.1",
+    "langchain>=1.5.0",
+    "langchain-openai>=1.7.4",
+    "langgraph>=1.2.20",
+    "mineru>=2.6",
+    "pydantic>=2.14.3",
+    "pydantic-settings>=2.16.2",
+    "pymilvus>=3.0.3",
+    "pymysql>=1.2.4",
+    "python-docx>=1.2.0",
+    "python-dotenv>=1.2.4",
+    "redis>=8.1.0",
+    "sqlalchemy>=2.1.8",
+    "uvicorn>=0.54.0",
+]
+
+[tool.uv]
+# 统一用清华源，避免 PyPI 直连抖动
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
