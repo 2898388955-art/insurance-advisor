@@ -20,8 +20,10 @@ class Settings(BaseSettings):
     mysql_database: str = "insurance_advisor"
 
     redis_port: int = 6380
+    milvus_host: str = "127.0.0.1"
     milvus_port: int = 19530
     milvus_uri: str = ""
+    ollama_url: str = "http://127.0.0.1:11434"
 
     # Java 业务服务
     java_base_url: str = "http://127.0.0.1:8080"

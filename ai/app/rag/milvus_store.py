@@ -10,7 +10,7 @@ COLLECTION = "clause_child"
 
 
 def get_client() -> MilvusClient:
-    return MilvusClient(uri=f"http://127.0.0.1:{settings.milvus_port}")
+    return MilvusClient(uri=f"http://{settings.milvus_host}:{settings.milvus_port}")
 
 
 def ensure_collection(client: MilvusClient) -> None:

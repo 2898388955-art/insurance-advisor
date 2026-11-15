@@ -131,6 +131,76 @@ services:
   #   ports: ["9200:9200"]
   #   volumes: [es_data:/usr/share/elasticsearch/data]
 
+  # ---------- 应用服务 ----------
+  server:
+    build: ../server
+    container_name: ia-server
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-insurance_advisor}
+      MYSQL_USER: ${MYSQL_USER:-ia}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      APP_STORAGE_ENDPOINT: http://rustfs:9000
+      APP_STORAGE_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+      APP_STORAGE_SECRET_KEY: ${RUSTFS_SECRET_KEY}
+      APP_STORAGE_BUCKET: insurance-product
+      TZ: Asia/Shanghai
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
+
+  ai:
+    build: ../ai
+    container_name: ia-ai
+    restart: unless-stopped
+    ports:
+      - "${AI_PORT:-8000}:8000"
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-insurance_advisor}
+      MYSQL_USER: ${MYSQL_USER:-ia}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MILVUS_HOST: milvus
+      MILVUS_PORT: 19530
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      JAVA_BASE_URL: http://server:8080
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-flash}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com/v1}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      TZ: Asia/Shanghai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # 条款原文与解析产物（可选，导入数据时使用）
+      - ../data:/app/data
+    depends_on:
+      mysql:
+        condition: service_healthy
+      milvus:
+        condition: service_healthy
+      server:
+        condition: service_started
+
+  web:
+    build: ../web
+    container_name: ia-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8088}:80"
+    depends_on:
+      server:
+        condition: service_started
+      ai:
+        condition: service_started
+
 volumes:
   mysql_data:
   redis_data:

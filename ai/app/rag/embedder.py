@@ -11,15 +11,16 @@ import time
 
 import httpx
 
-OLLAMA_URL = "http://127.0.0.1:11434"
 MODEL = "bge-m3"
 DIM = 1024
 
 
 class OllamaEmbedder:
-    def __init__(self, model: str = MODEL, base_url: str = OLLAMA_URL, batch_size: int = 16):
+    def __init__(self, model: str = MODEL, base_url: str | None = None, batch_size: int = 16):
+        from app.config import settings
+
         self.model = model
-        self.base_url = base_url.rstrip("/")
+        self.base_url = (base_url or settings.ollama_url).rstrip("/")
         self.batch_size = batch_size
 
     def embed(self, texts: list[str]) -> list[list[float]]:

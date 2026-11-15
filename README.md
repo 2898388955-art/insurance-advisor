@@ -59,7 +59,29 @@
 
 ## 快速开始
 
-### 0. 前置条件
+### 方式一：Docker Compose 一键启动（推荐）
+
+```bash
+cp deploy/.env.example deploy/.env      # 修改数据库 / 对象存储密码
+export DEEPSEEK_API_KEY=sk-xxx          # 只从环境变量注入，不写入文件
+docker compose -f deploy/docker-compose.yml build
+docker compose -f deploy/docker-compose.yml up -d
+```
+
+启动后：
+
+- 前端：http://127.0.0.1:8088
+- 业务后端：http://127.0.0.1:8080
+- AI 服务：http://127.0.0.1:8000
+- 中间件：MySQL 3307 / Redis 6380 / Milvus 19530 / RustFS 9000
+
+AI 容器通过 `host.docker.internal:11434` 访问宿主机的 Ollama（embedding 用 bge-m3），请确保宿主机 Ollama 已启动并已 `ollama pull bge-m3`。
+
+首次启动后仍需执行 `server/src/main/resources/db/migration/` 下的 SQL 建表。
+
+### 方式二：本地开发模式
+
+#### 0. 前置条件
 
 - JDK 21、Node 18+、Python 3.12、uv、Docker Desktop
 - DeepSeek API Key（或任意 OpenAI 兼容服务）
@@ -135,7 +157,7 @@ uv run python -m app.ingest.batch_ingest
 uv run python -m app.rag.index_doc --doc-id <doc_id> --rebuild
 ```
 
-字段抽取结果通过 `deploy/mysql/seed/02-field-extraction-updates.sql` 与 `03-field-extraction-quotes.sql` 落库。
+字段抽取的提示词与校验规则见 [docs/decisions.md](docs/decisions.md) 中的 D-09。
 
 ## API 一览
 

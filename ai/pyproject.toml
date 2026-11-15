@@ -10,7 +10,6 @@ dependencies = [
     "langchain>=1.5.0",
     "langchain-openai>=1.7.4",
     "langgraph>=1.2.20",
-    "mineru>=2.6",
     "pydantic>=2.14.3",
     "pydantic-settings>=2.16.2",
     "pymilvus>=3.0.3",
@@ -21,6 +20,10 @@ dependencies = [
     "sqlalchemy>=2.1.8",
     "uvicorn>=0.54.0",
 ]
+
+[project.optional-dependencies]
+# 只有条款解析 / 入库需要，运行态镜像不安装
+ingest = ["mineru>=2.6"]
 
 [tool.uv]
 # 统一用清华源，避免 PyPI 直连抖动
