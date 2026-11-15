@@ -12,6 +12,7 @@ import pymysql
 
 from app.config import settings
 from app.rag.embedder import OllamaEmbedder
+from app.rag.fusion import weighted_rrf
 from app.rag.milvus_store import COLLECTION, get_client
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ class RetrievalService:
         top_k = top_k or settings.retrieval_top_k
         vector = await asyncio.to_thread(self.embedder.embed_one, query)
         expr = f"product_id == {int(product_id)}" if product_id else None
-        hits = await asyncio.to_thread(self._search, vector, top_k, expr)
+        hits = await asyncio.to_thread(self._search, query, vector, top_k, expr)
         if not hits:
             return []
         parents = await asyncio.to_thread(self._load_parents, [h["parent_id"] for h in hits])
@@ -35,19 +36,41 @@ class RetrievalService:
             h["parent_content"] = parents.get(h["parent_id"], h["text"])
         return hits
 
-    def _search(self, vector: list[float], top_k: int, expr: str | None) -> list[dict]:
-        # pymilvus 3.x 用 filter 参数，不是 expr（expr 会落进 **kwargs 触发冲突）
-        res = self.client.search(
-            COLLECTION, data=[vector], anns_field="embedding", limit=top_k,
-            filter=expr or "", output_fields=["doc_id", "product_id", "parent_id",
-                                              "heading_path", "page_no", "text"],
+    def _search(self, query: str, vector: list[float], top_k: int,
+                expr: str | None) -> list[dict]:
+        candidates = max(top_k * 4, settings.retrieval_candidates)
+        fields = ["doc_id", "product_id", "parent_id", "heading_path", "page_no", "text"]
+
+        dense: list = []
+        sparse: list = []
+        if settings.retrieval_dense_weight > 0:
+            dense = self.client.search(
+                COLLECTION, data=[vector], anns_field="embedding", limit=candidates,
+                filter=expr or "", output_fields=fields,
+                search_params={"metric_type": "COSINE", "params": {"ef": 64}},
+            )[0]
+        if settings.retrieval_sparse_weight > 0:
+            sparse = self.client.search(
+                COLLECTION, data=[query], anns_field="sparse", limit=candidates,
+                filter=expr or "", output_fields=fields,
+                search_params={"metric_type": "BM25"},
+            )[0]
+
+        fused = weighted_rrf(
+            [{"id": int(h["id"]), "entity": h["entity"]} for h in dense],
+            [{"id": int(h["id"]), "entity": h["entity"]} for h in sparse],
+            k=settings.retrieval_rrf_k,
+            dense_weight=settings.retrieval_dense_weight,
+            sparse_weight=settings.retrieval_sparse_weight,
+            limit=top_k,
         )
+
         out = []
-        for hit in res[0]:
+        for hit in fused:
             e = hit["entity"]
             out.append({
-                "chunk_id": int(hit["id"]),
-                "score": float(hit["distance"]),
+                "chunk_id": hit["id"],
+                "score": float(hit["score"]),
                 "doc_id": e["doc_id"],
                 "product_id": int(e["product_id"]),
                 "parent_id": int(e["parent_id"]),

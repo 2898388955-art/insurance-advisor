@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     llm_timeout: float = 120.0
 
     retrieval_top_k: int = 5
+    retrieval_candidates: int = 20
+    retrieval_rrf_k: int = 60
+    # 评测结论：当前语料上纯向量最优（见 docs/eval-report.md）。
+    # 混合检索保留为可配置能力，扩大语料后可调整权重重新启用。
+    retrieval_dense_weight: float = 1.0
+    retrieval_sparse_weight: float = 0.0
 
     @property
     def mysql_dsn(self) -> dict:

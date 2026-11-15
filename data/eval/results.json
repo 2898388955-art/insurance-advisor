@@ -1,0 +1,112 @@
+{
+  "results": {
+    "filtered": {
+      "dense": {
+        "n": 60,
+        "recall@1": 0.967,
+        "recall@3": 1.0,
+        "recall@5": 1.0,
+        "recall@10": 1.0,
+        "mrr": 0.981
+      },
+      "sparse": {
+        "n": 60,
+        "recall@1": 0.85,
+        "recall@3": 0.933,
+        "recall@5": 0.983,
+        "recall@10": 1.0,
+        "mrr": 0.903
+      },
+      "rrf_equal": {
+        "n": 60,
+        "recall@1": 0.933,
+        "recall@3": 0.983,
+        "recall@5": 1.0,
+        "recall@10": 1.0,
+        "mrr": 0.963
+      },
+      "rrf_w70": {
+        "n": 60,
+        "recall@1": 0.917,
+        "recall@3": 1.0,
+        "recall@5": 1.0,
+        "recall@10": 1.0,
+        "mrr": 0.953
+      },
+      "rrf_w80": {
+        "n": 60,
+        "recall@1": 0.917,
+        "recall@3": 1.0,
+        "recall@5": 1.0,
+        "recall@10": 1.0,
+        "mrr": 0.953
+      },
+      "rrf_w90": {
+        "n": 60,
+        "recall@1": 0.917,
+        "recall@3": 1.0,
+        "recall@5": 1.0,
+        "recall@10": 1.0,
+        "mrr": 0.956
+      }
+    },
+    "global": {
+      "dense": {
+        "n": 60,
+        "recall@1": 0.217,
+        "recall@3": 0.467,
+        "recall@5": 0.633,
+        "recall@10": 0.933,
+        "mrr": 0.416
+      },
+      "sparse": {
+        "n": 60,
+        "recall@1": 0.05,
+        "recall@3": 0.267,
+        "recall@5": 0.283,
+        "recall@10": 0.517,
+        "mrr": 0.192
+      },
+      "rrf_equal": {
+        "n": 60,
+        "recall@1": 0.1,
+        "recall@3": 0.3,
+        "recall@5": 0.45,
+        "recall@10": 0.8,
+        "mrr": 0.255
+      },
+      "rrf_w70": {
+        "n": 60,
+        "recall@1": 0.133,
+        "recall@3": 0.35,
+        "recall@5": 0.483,
+        "recall@10": 0.8,
+        "mrr": 0.299
+      },
+      "rrf_w80": {
+        "n": 60,
+        "recall@1": 0.15,
+        "recall@3": 0.367,
+        "recall@5": 0.483,
+        "recall@10": 0.8,
+        "mrr": 0.313
+      },
+      "rrf_w90": {
+        "n": 60,
+        "recall@1": 0.217,
+        "recall@3": 0.4,
+        "recall@5": 0.55,
+        "recall@10": 0.867,
+        "mrr": 0.367
+      }
+    }
+  },
+  "router": {
+    "n": 6,
+    "accuracy": 1.0
+  },
+  "citations": {
+    "n": 6,
+    "hit": 0.333
+  }
+}
