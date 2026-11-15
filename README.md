@@ -1,5 +1,7 @@
 # 保顾问 · Insurance Advisor Agent
 
+![CI](https://github.com/2898388955-art/insurance-advisor/actions/workflows/ci.yml/badge.svg)
+
 面向保险条款问答与产品推荐的智能顾问系统。**Java 业务后端 + Python AI 服务 + Vue 3 前端**，回答带条款页码引用，可回溯到原文。
 
 > 仅用于技术研究与产品演示，不构成投保建议。产品资料来自保险公司公开披露渠道。
