@@ -75,7 +75,16 @@ docker compose -f deploy/docker-compose.yml up -d
 - AI 服务：http://127.0.0.1:8000
 - 中间件：MySQL 3307 / Redis 6380 / Milvus 19530 / RustFS 9000
 
-AI 容器通过 `host.docker.internal:11434` 访问宿主机的 Ollama（embedding 用 bge-m3），请确保宿主机 Ollama 已启动并已 `ollama pull bge-m3`。
+AI 容器通过 `host.docker.internal:11434` 访问宿主机的 Ollama（embedding 用 bge-m3）。宿主机 Ollama 需要监听所有网卡，否则容器无法连接：
+
+```bash
+# Windows (PowerShell)
+$env:OLLAMA_HOST="0.0.0.0:11434"; ollama serve
+# Linux / macOS
+OLLAMA_HOST=0.0.0.0:11434 ollama serve
+
+ollama pull bge-m3
+```
 
 首次启动后仍需执行 `server/src/main/resources/db/migration/` 下的 SQL 建表。
 

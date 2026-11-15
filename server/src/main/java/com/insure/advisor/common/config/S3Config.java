@@ -35,8 +35,10 @@ public class S3Config {
 
     @Bean
     public S3Presigner s3Presigner() {
+        String publicEndpoint = (props.getPublicEndpoint() == null || props.getPublicEndpoint().isBlank())
+                ? props.getEndpoint() : props.getPublicEndpoint();
         return S3Presigner.builder()
-                .endpointOverride(URI.create(props.getEndpoint()))
+                .endpointOverride(URI.create(publicEndpoint))
                 .credentialsProvider(credentials())
                 .region(Region.of(props.getRegion()))
                 .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
