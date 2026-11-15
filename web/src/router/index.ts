@@ -4,7 +4,7 @@ import ProductListView from '../views/ProductListView.vue'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'products', component: ProductListView },
+    { path: '/', alias: '/products', name: 'products', component: ProductListView },
     {
       path: '/products/:id',
       name: 'product-detail',

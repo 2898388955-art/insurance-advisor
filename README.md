@@ -6,6 +6,8 @@
 
 > 仅用于技术研究与产品演示，不构成投保建议。产品资料来自保险公司公开披露渠道。
 
+![演示：产品库 → 条款详情 → 产品对比 → 带条款引用的流式问答](docs/screenshots/demo.gif)
+
 ![产品库](docs/screenshots/products.png)
 
 ![对话](docs/screenshots/chat.png)
