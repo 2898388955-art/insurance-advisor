@@ -12,19 +12,18 @@ import com.insure.advisor.common.web.PageResult;
 import com.insure.advisor.product.dto.CompareVO;
 import com.insure.advisor.product.dto.ProductCardVO;
 import com.insure.advisor.product.dto.ProductDetailVO;
-import com.insure.advisor.product.dto.ProductImageVO;
 import com.insure.advisor.product.dto.ProductQuery;
 import com.insure.advisor.product.entity.Product;
 import com.insure.advisor.product.entity.ProductImage;
 import com.insure.advisor.product.mapper.ProductImageMapper;
 import com.insure.advisor.product.mapper.ProductMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,14 +43,21 @@ public class ProductService {
     private final ObjectStorageService storage;
 
     public PageResult<ProductCardVO> search(ProductQuery q) {
+        Page<Product> result = productMapper.selectPage(pageOf(q), buildQuery(q));
+        Map<Long, String> categoryNames = categoryNames();
+        Map<Long, String> covers = coverImages(result.getRecords().stream().map(Product::getId).toList());
+        List<ProductCardVO> cards = result.getRecords().stream()
+                .map(x -> toCard(x, categoryNames, covers))
+                .toList();
+        return PageResult.of(cards, result.getTotal(), result.getCurrent(), result.getSize());
+    }
+
+    private LambdaQueryWrapper<Product> buildQuery(ProductQuery q) {
         LambdaQueryWrapper<Product> w = new LambdaQueryWrapper<>();
         w.eq(Product::getStatus, 1);
 
         if (q.getCategoryId() != null) {
-            List<Long> ids = categoryMapper.selectList(new LambdaQueryWrapper<Category>()
-                            .and(x -> x.eq(Category::getId, q.getCategoryId())
-                                    .or().eq(Category::getParentId, q.getCategoryId())))
-                    .stream().map(Category::getId).toList();
+            List<Long> ids = categoryIds(q.getCategoryId());
             if (!ids.isEmpty()) {
                 w.in(Product::getCategoryId, ids);
             }
@@ -73,25 +79,33 @@ public class ProductService {
                     .or().like(Product::getCompany, k)
                     .or().like(Product::getHighlights, k));
         }
-        // 保费大量缺失，排序时把 null 放最后，避免"暂无价格"的产品占据首屏
-        if ("premium_asc".equals(q.getSort())) {
+        applySort(w, q.getSort());
+        return w;
+    }
+
+    /** 选中一级分类时，同时包含其二级分类。 */
+    private List<Long> categoryIds(Long categoryId) {
+        return categoryMapper.selectList(new LambdaQueryWrapper<Category>()
+                        .and(x -> x.eq(Category::getId, categoryId)
+                                .or().eq(Category::getParentId, categoryId)))
+                .stream().map(Category::getId).toList();
+    }
+
+    /** 保费大量缺失，排序时把 null 放最后，避免"暂无价格"的产品占据首屏。 */
+    private void applySort(LambdaQueryWrapper<Product> w, String sort) {
+        if ("premium_asc".equals(sort)) {
             w.last("ORDER BY (min_premium IS NULL) ASC, min_premium ASC");
-        } else if ("premium_desc".equals(q.getSort())) {
+        } else if ("premium_desc".equals(sort)) {
             w.last("ORDER BY (min_premium IS NULL) ASC, min_premium DESC");
         } else {
             w.orderByAsc(Product::getId);
         }
+    }
 
+    private Page<Product> pageOf(ProductQuery q) {
         int page = Math.max(1, q.getPage() == null ? 1 : q.getPage());
         int size = Math.min(50, Math.max(1, q.getSize() == null ? 12 : q.getSize()));
-        Page<Product> p = productMapper.selectPage(new Page<>(page, size), w);
-
-        Map<Long, String> categoryNames = categoryNames();
-        Map<Long, String> covers = coverImages(p.getRecords().stream().map(Product::getId).toList());
-        List<ProductCardVO> cards = p.getRecords().stream()
-                .map(x -> toCard(x, categoryNames, covers))
-                .toList();
-        return PageResult.of(cards, p.getTotal(), p.getCurrent(), p.getSize());
+        return new Page<>(page, size);
     }
 
     public ProductDetailVO detail(Long id) {
@@ -101,7 +115,7 @@ public class ProductService {
         }
         ProductDetailVO vo = new ProductDetailVO();
         ProductCardVO card = toCard(p, categoryNames(), coverImages(List.of(id)));
-        copy(card, vo);
+        BeanUtils.copyProperties(card, vo);
 
         vo.setPaymentTerm(p.getPaymentTerm());
         vo.setCoverageTerm(p.getCoverageTerm());
@@ -112,16 +126,7 @@ public class ProductService {
 
         List<ProductClause> clauses = clauseMapper.selectList(
                 new LambdaQueryWrapper<ProductClause>().eq(ProductClause::getProductId, id));
-        vo.setClauses(clauses.stream().map(c -> {
-            ProductDetailVO.ClauseVO cv = new ProductDetailVO.ClauseVO();
-            cv.setDocId(c.getDocId());
-            cv.setClauseName(c.getClauseName());
-            cv.setFileType(c.getFileType());
-            cv.setPageCount(c.getPageCount());
-            cv.setStatus(c.getStatus());
-            cv.setRegNo(c.getRegNo());
-            return cv;
-        }).toList());
+        vo.setClauses(clauses.stream().map(this::toClauseVO).toList());
         vo.setImages(imageService.list(id));
         return vo;
     }
@@ -145,14 +150,12 @@ public class ProductService {
 
         vo.getRows().add(row("productType", "产品类型", ordered, p -> nvl(p.getProductType())));
         vo.getRows().add(row("age", "投保年龄", ordered, this::ageText));
-        vo.getRows().add(row("period", "保障期限", ordered, p -> nvl(firstNonBlank(p.getCoverageTerm(), p.getPeriodDesc()))));
-        vo.getRows().add(row("waiting", "等待期", ordered, p -> p.getWaitingDays() == null ? "条款未披露" : p.getWaitingDays() + " 天"));
-        vo.getRows().add(row("renewal", "保证续保", ordered, p -> p.getGuaranteedRenewal() == null ? "条款未提及"
-                : (p.getGuaranteedRenewal() ? "是" : "否")));
+        vo.getRows().add(row("period", "保障期限", ordered, this::periodText));
+        vo.getRows().add(row("waiting", "等待期", ordered, this::waitingText));
+        vo.getRows().add(row("renewal", "保证续保", ordered, this::renewalText));
         vo.getRows().add(row("payment", "缴费期限", ordered, p -> nvl(p.getPaymentTerm())));
         vo.getRows().add(row("premium", "保费", ordered, this::priceShort));
-        vo.getRows().add(row("data", "字段来源", ordered,
-                p -> "clause_pdf".equals(p.getVerifiedFrom()) ? "条款原文抽取" : "未核验"));
+        vo.getRows().add(row("data", "字段来源", ordered, this::sourceText));
         return vo;
     }
 
@@ -210,6 +213,36 @@ public class ProductService {
         return list;
     }
 
+    private ProductDetailVO.ClauseVO toClauseVO(ProductClause c) {
+        ProductDetailVO.ClauseVO cv = new ProductDetailVO.ClauseVO();
+        cv.setDocId(c.getDocId());
+        cv.setClauseName(c.getClauseName());
+        cv.setFileType(c.getFileType());
+        cv.setPageCount(c.getPageCount());
+        cv.setStatus(c.getStatus());
+        cv.setRegNo(c.getRegNo());
+        return cv;
+    }
+
+    private String periodText(Product p) {
+        return nvl(firstNonBlank(p.getCoverageTerm(), p.getPeriodDesc()));
+    }
+
+    private String waitingText(Product p) {
+        return p.getWaitingDays() == null ? "条款未披露" : p.getWaitingDays() + " 天";
+    }
+
+    private String renewalText(Product p) {
+        if (p.getGuaranteedRenewal() == null) {
+            return "条款未提及";
+        }
+        return p.getGuaranteedRenewal() ? "是" : "否";
+    }
+
+    private String sourceText(Product p) {
+        return "clause_pdf".equals(p.getVerifiedFrom()) ? "条款原文抽取" : "未核验";
+    }
+
     private String ageText(Product p) {
         if (p.getMinAge() == null && p.getMaxAge() == null) {
             return "条款未披露";
@@ -264,27 +297,4 @@ public class ProductService {
         return out;
     }
 
-    private void copy(ProductCardVO from, ProductDetailVO to) {
-        to.setId(from.getId());
-        to.setExternalId(from.getExternalId());
-        to.setName(from.getName());
-        to.setCompany(from.getCompany());
-        to.setCategoryId(from.getCategoryId());
-        to.setCategoryName(from.getCategoryName());
-        to.setProductType(from.getProductType());
-        to.setMinAge(from.getMinAge());
-        to.setMaxAge(from.getMaxAge());
-        to.setMinPremium(from.getMinPremium());
-        to.setMaxPremium(from.getMaxPremium());
-        to.setPeriodDesc(from.getPeriodDesc());
-        to.setWaitingDays(from.getWaitingDays());
-        to.setGuaranteedRenewal(from.getGuaranteedRenewal());
-        to.setHighlights(from.getHighlights());
-        to.setDataStatus(from.getDataStatus());
-        to.setVerifiedFrom(from.getVerifiedFrom());
-        to.setCoverImageUrl(from.getCoverImageUrl());
-        to.setPriceDisplay(from.getPriceDisplay());
-        to.setPriceStatus(from.getPriceStatus());
-        to.setLabels(from.getLabels());
-    }
 }
