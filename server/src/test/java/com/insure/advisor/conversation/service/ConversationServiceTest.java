@@ -88,6 +88,24 @@ class ConversationServiceTest {
     }
 
     @Test
+    void getMissingConversationThrows() {
+        when(conversationMapper.selectById(3L)).thenReturn(null);
+
+        assertThatThrownBy(() -> conversationService.get(3L))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("会话不存在");
+    }
+
+    @Test
+    void messagesMissingConversationThrows() {
+        when(conversationMapper.selectById(4L)).thenReturn(null);
+
+        assertThatThrownBy(() -> conversationService.messages(4L))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("会话不存在");
+    }
+
+    @Test
     void messagesMapToVo() {
         when(conversationMapper.selectById(1L)).thenReturn(conversation(1, "会话"));
         Message m = new Message();

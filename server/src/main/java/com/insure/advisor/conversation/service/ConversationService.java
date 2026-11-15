@@ -43,32 +43,18 @@ public class ConversationService {
     }
 
     public List<MessageVO> messages(Long conversationId) {
-        get(conversationId); // 不存在直接 404
+        requireConversation(conversationId);
         return messageMapper.selectList(new LambdaQueryWrapper<Message>()
                         .eq(Message::getConversationId, conversationId)
                         .orderByAsc(Message::getId))
-                .stream().map(m -> {
-                    MessageVO vo = new MessageVO();
-                    vo.setId(m.getId());
-                    vo.setRole(m.getRole());
-                    vo.setContent(m.getContent());
-                    vo.setIntent(m.getIntent());
-                    vo.setCitationsJson(m.getCitationsJson());
-                    vo.setToolsJson(m.getToolsJson());
-                    vo.setElapsedMs(m.getElapsedMs());
-                    vo.setCreatedAt(m.getCreatedAt());
-                    return vo;
-                }).toList();
+                .stream().map(this::toMessageVO).toList();
     }
 
     public ConversationVO rename(Long id, String title) {
         if (!StringUtils.hasText(title)) {
             throw new BizException("标题不能为空");
         }
-        Conversation c = conversationMapper.selectById(id);
-        if (c == null) {
-            throw new BizException(4040, "会话不存在");
-        }
+        Conversation c = requireConversation(id);
         c.setTitle(title.trim());
         conversationMapper.updateById(c);
         return toVO(c);
@@ -79,9 +65,7 @@ public class ConversationService {
      */
     @Transactional
     public void delete(Long id) {
-        if (conversationMapper.selectById(id) == null) {
-            throw new BizException(4040, "会话不存在");
-        }
+        requireConversation(id);
         messageMapper.delete(new LambdaQueryWrapper<Message>().eq(Message::getConversationId, id));
         cleanupMapper.deleteCheckpoints(id);
         cleanupMapper.deleteSummaries(id);
@@ -89,11 +73,7 @@ public class ConversationService {
     }
 
     public ConversationVO get(Long id) {
-        Conversation c = conversationMapper.selectById(id);
-        if (c == null) {
-            throw new BizException(4040, "会话不存在");
-        }
-        return toVO(c);
+        return toVO(requireConversation(id));
     }
 
     public void touch(Long id, String intent) {
@@ -103,6 +83,27 @@ public class ConversationService {
         }
         c.setLastIntent(intent);
         conversationMapper.updateById(c);
+    }
+
+    private Conversation requireConversation(Long id) {
+        Conversation c = conversationMapper.selectById(id);
+        if (c == null) {
+            throw new BizException(4040, "会话不存在");
+        }
+        return c;
+    }
+
+    private MessageVO toMessageVO(Message m) {
+        MessageVO vo = new MessageVO();
+        vo.setId(m.getId());
+        vo.setRole(m.getRole());
+        vo.setContent(m.getContent());
+        vo.setIntent(m.getIntent());
+        vo.setCitationsJson(m.getCitationsJson());
+        vo.setToolsJson(m.getToolsJson());
+        vo.setElapsedMs(m.getElapsedMs());
+        vo.setCreatedAt(m.getCreatedAt());
+        return vo;
     }
 
     private ConversationVO toVO(Conversation c) {
