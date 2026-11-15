@@ -5,7 +5,6 @@ import com.insure.advisor.common.exception.BizException;
 import com.insure.advisor.common.storage.ObjectStorageService;
 import com.insure.advisor.common.storage.StorageProperties;
 import com.insure.advisor.product.dto.ProductImageVO;
-import com.insure.advisor.product.entity.Product;
 import com.insure.advisor.product.entity.ProductImage;
 import com.insure.advisor.product.mapper.ProductImageMapper;
 import com.insure.advisor.product.mapper.ProductMapper;
@@ -34,35 +33,18 @@ public class ProductImageService {
 
     @Transactional
     public ProductImageVO upload(Long productId, MultipartFile file, String type) {
-        Product product = productMapper.selectById(productId);
-        if (product == null) {
-            throw new BizException(4040, "产品不存在");
-        }
-        if (file == null || file.isEmpty()) {
-            throw new BizException("文件为空");
-        }
-        if (file.getSize() > props.getMaxFileSize()) {
-            throw new BizException("图片不能超过 5MB");
-        }
-        String normalizedType = (type == null || type.isBlank()) ? "MAIN" : type.toUpperCase();
-        if (!ALLOWED_TYPES.contains(normalizedType)) {
-            throw new BizException("type 只能是 MAIN 或 GALLERY");
-        }
+        requireProduct(productId);
+        validateFile(file);
+        String normalizedType = normalizeType(type);
+        byte[] bytes = readBytes(file);
 
-        byte[] bytes;
-        try {
-            bytes = file.getBytes();
-        } catch (IOException e) {
-            throw new BizException("读取文件失败");
-        }
-        // 校验文件头，防止改扩展名绕过
+        // 按文件头判断真实类型，防止改扩展名绕过
         String contentType = detectContentType(bytes);
         if (contentType == null) {
             throw new BizException("仅支持 jpg / png / webp");
         }
 
-        String key = "products/%d/%s.%s".formatted(productId, UUID.randomUUID().toString().replace("-", ""),
-                contentType.substring("image/".length()));
+        String key = buildObjectKey(productId, contentType);
         storage.put(key, bytes, contentType);
 
         ProductImage image = new ProductImage();
@@ -71,9 +53,7 @@ public class ProductImageService {
         image.setType(normalizedType);
         image.setContentType(contentType);
         image.setSizeBytes(bytes.length);
-        Long existing = imageMapper.selectCount(
-                new LambdaQueryWrapper<ProductImage>().eq(ProductImage::getProductId, productId));
-        image.setSort(Math.toIntExact(existing == null ? 0L : existing) + 1);
+        image.setSort(nextSort(productId));
         imageMapper.insert(image);
 
         log.info("uploaded image productId={} key={} size={}", productId, key, bytes.length);
@@ -86,6 +66,50 @@ public class ProductImageService {
                         .orderByAsc(ProductImage::getSort)
                         .orderByAsc(ProductImage::getId))
                 .stream().map(this::toVO).toList();
+    }
+
+    private void requireProduct(Long productId) {
+        if (productMapper.selectById(productId) == null) {
+            throw new BizException(4040, "产品不存在");
+        }
+    }
+
+    /** file 来自 HTTP 边界，null/空仍属于输入校验，不是框架兜底。 */
+    private void validateFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BizException("文件为空");
+        }
+        if (file.getSize() > props.getMaxFileSize()) {
+            throw new BizException("图片不能超过 5MB");
+        }
+    }
+
+    private String normalizeType(String type) {
+        String normalizedType = (type == null || type.isBlank()) ? "MAIN" : type.toUpperCase();
+        if (!ALLOWED_TYPES.contains(normalizedType)) {
+            throw new BizException("type 只能是 MAIN 或 GALLERY");
+        }
+        return normalizedType;
+    }
+
+    private byte[] readBytes(MultipartFile file) {
+        try {
+            return file.getBytes();
+        } catch (IOException e) {
+            throw new BizException("读取文件失败");
+        }
+    }
+
+    private String buildObjectKey(Long productId, String contentType) {
+        String extension = contentType.substring("image/".length());
+        String uuid = UUID.randomUUID().toString().replace("-", "");
+        return "products/%d/%s.%s".formatted(productId, uuid, extension);
+    }
+
+    private int nextSort(Long productId) {
+        long existing = imageMapper.selectCount(
+                new LambdaQueryWrapper<ProductImage>().eq(ProductImage::getProductId, productId));
+        return Math.toIntExact(existing) + 1;
     }
 
     private ProductImageVO toVO(ProductImage image) {
