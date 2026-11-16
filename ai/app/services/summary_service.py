@@ -1,7 +1,10 @@
 """长会话记忆压缩：超出阈值后把较早轮次压成一段摘要。
 
-策略：保留最近 4 轮原文，更早的轮次每累计 4 轮压缩一次，
-摘要与「已覆盖到哪条快照」一起存表，避免重复摘要。
+策略：
+- 最近 KEEP_RECENT 轮保留原文，不参与压缩；
+- 总轮次达到 MIN_TURNS 后，每 TRIGGER_EVERY 轮触发一次摘要；
+- 每次把「最近 KEEP_RECENT 轮以外」的历史整体重新压缩，覆盖旧摘要，
+  同时记录已覆盖的最后一条快照 id。
 """
 from __future__ import annotations
 
@@ -15,9 +18,14 @@ from app.services.checkpoint_service import CheckpointService
 
 logger = logging.getLogger(__name__)
 
+# 触发节奏：总轮次 >= 6 且是 4 的倍数时摘要（即第 8、12、16... 轮）。
 KEEP_RECENT = 4
 TRIGGER_EVERY = 4
 MIN_TURNS = 6
+
+# 单次摘要请求的输入上限：每条回答先截断，再限制整段对话长度，控制 token。
+ANSWER_LIMIT = 400
+TRANSCRIPT_LIMIT = 6000
 
 SUMMARY_PROMPT = (
     "把以下保险顾问对话压缩成不超过 120 字的中文摘要。"
@@ -33,39 +41,55 @@ class SummaryService:
         self.llm = llm or ChatClient()
 
     async def maybe_summarize(self, conversation_id: int) -> None:
+        """轮到触发节奏时压缩较早对话；失败只记日志，不影响本轮回复。"""
         total = self.checkpoints.count(conversation_id)
-        if total < MIN_TURNS or total % TRIGGER_EVERY != 0:
+        if not self._should_summarize(total):
             return
+
         rows = self.checkpoints.older_than_recent(conversation_id, KEEP_RECENT)
         if not rows:
             return
-        transcript = "\n".join(
-            f"用户：{r['question']}\n顾问：{(r['answer'] or '')[:400]}" for r in rows)
+
+        summary = await self._summarize(self._transcript(rows))
+        if summary is None:
+            return
+
+        self._upsert(conversation_id, summary, rows[-1]["id"])
+        logger.info("summarized conversation=%s turns=%s", conversation_id, len(rows))
+
+    @staticmethod
+    def _should_summarize(total: int) -> bool:
+        """轮次够多，且正好走到 4 的倍数（第 8、12、16... 轮）。"""
+        return total >= MIN_TURNS and total % TRIGGER_EVERY == 0
+
+    @staticmethod
+    def _transcript(rows: list[dict]) -> str:
+        """把历史轮次拼成「用户：… / 顾问：…」的纯文本。"""
+        return "\n".join(
+            f"用户：{r['question']}\n顾问：{(r['answer'] or '')[:ANSWER_LIMIT]}" for r in rows)
+
+    async def _summarize(self, transcript: str) -> str | None:
+        """调用 LLM 压缩对话；失败返回 None，由调用方跳过落库。"""
         try:
             summary = await self.llm.complete([
                 {"role": "system", "content": SUMMARY_PROMPT},
-                {"role": "user", "content": transcript[:6000]},
+                {"role": "user", "content": transcript[:TRANSCRIPT_LIMIT]},
             ])
         except LlmError as e:
             logger.warning("summarize failed: %s", e)
-            return
-        self._upsert(conversation_id, summary.strip(), rows[-1]["id"])
-        logger.info("summarized conversation=%s turns=%s", conversation_id, len(rows))
+            return None
+        return summary.strip()
 
     def history(self, conversation_id: int) -> list[dict]:
         """摘要 + 最近几轮原文，作为下一轮的对话历史。"""
-        messages: list[dict] = []
+        recent = self.checkpoints.history_messages(conversation_id, KEEP_RECENT)
         summary = self._load_summary(conversation_id)
-        if summary:
-            messages.append({"role": "system",
-                             "content": "此前对话摘要：" + summary})
-        for row in self.checkpoints.recent(conversation_id, KEEP_RECENT):
-            messages.append({"role": "user", "content": row["question"]})
-            if row.get("answer"):
-                messages.append({"role": "assistant", "content": row["answer"]})
-        return messages
+        if not summary:
+            return recent
+        return [{"role": "system", "content": "此前对话摘要：" + summary}, *recent]
 
     def _load_summary(self, conversation_id: int) -> str | None:
+        """读取该会话最新的摘要；没有则返回 None。"""
         conn = pymysql.connect(**settings.mysql_dsn)
         try:
             with conn.cursor() as cur:
@@ -77,6 +101,7 @@ class SummaryService:
             conn.close()
 
     def _upsert(self, conversation_id: int, summary: str, covered_id: int) -> None:
+        """写入摘要；已有记录时覆盖，并更新已覆盖的快照 id。"""
         conn = pymysql.connect(**settings.mysql_dsn)
         try:
             with conn.cursor() as cur:
